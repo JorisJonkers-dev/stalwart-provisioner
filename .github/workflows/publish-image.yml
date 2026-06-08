@@ -1,0 +1,28 @@
+name: Publish Image
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  publish:
+    name: Publish GHCR Image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+      - name: Build and push image
+        run: |
+          owner="$(printf '%s' "$GITHUB_REPOSITORY_OWNER" | tr '[:upper:]' '[:lower:]')"
+          version="${GITHUB_REF_NAME#v}"
+          image="ghcr.io/${owner}/stalwart-provisioner"
+          docker build -t "${image}:${version}" -t "${image}:sha-${GITHUB_SHA}" .
+          docker push "${image}:${version}"
+          docker push "${image}:sha-${GITHUB_SHA}"
+          echo "Published ${image}:${version}"

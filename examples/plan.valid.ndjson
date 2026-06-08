@@ -1,0 +1,4 @@
+{"@type":"create","object":"Domain","value":{"dom-main":{"name":"example.test"}}}
+{"@type":"update","object":"SystemSettings","value":{"defaultHostname":"mail.example.test","defaultDomainId":"#dom-main"}}
+{"@type":"create","object":"NetworkListener","value":{"lsnr-submission":{"name":"submission","protocol":"smtp","bind":{"[::]:587":true},"useTls":true,"tlsImplicit":false},"lsnr-imap":{"name":"imap","protocol":"imap","bind":{"[::]:143":true},"useTls":true,"tlsImplicit":false}}}
+{"@type":"create","object":"Tracer","value":{"trc-stdout":{"@type":"Stdout","level":"info","enable":true,"ansi":false,"buffered":false,"events":{},"eventsPolicy":"exclude","lossy":false}}}

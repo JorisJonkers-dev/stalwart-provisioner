@@ -1,0 +1,1 @@
+{"@type":"create","object":"NetworkListener","value":{"lsnr-submission":{"name":"submission","protocol":"invalid-protocol","bind":{"[::]:587":true},"useTls":true,"tlsImplicit":false}}}

@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "stalwart-provisioner/v2",
+  "domain": {
+    "name": "example.test",
+    "publicHostname": "mail.example.test"
+  },
+  "managedAccounts": [
+    {
+      "localPart": "service",
+      "passwordRef": {
+        "envVar": "EXAMPLE_SERVICE_PASSWORD"
+      }
+    },
+    {
+      "localPart": "service",
+      "passwordRef": {
+        "file": "/run/secrets/example-service-password"
+      }
+    }
+  ]
+}

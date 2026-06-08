@@ -1,0 +1,22 @@
+{
+  "schemaVersion": "stalwart-provisioner/v2",
+  "domain": {
+    "name": "example.test",
+    "publicHostname": "mail.example.test"
+  },
+  "dkim": {
+    "enabled": false
+  },
+  "dns": {
+    "mode": "consumer-managed"
+  },
+  "managedAccounts": [
+    {
+      "localPart": "dev",
+      "passwordRef": {
+        "envVar": "DEV_MAIL_PASSWORD"
+      },
+      "aliases": ["postmaster"]
+    }
+  ]
+}

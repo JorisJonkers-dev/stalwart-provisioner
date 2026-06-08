@@ -1,0 +1,14 @@
+{
+  "domain": {
+    "name": "example.test",
+    "publicHostname": "mail.example.test"
+  },
+  "managedAccounts": [
+    {
+      "localPart": "service",
+      "passwordRef": {
+        "envVar": "EXAMPLE_SERVICE_PASSWORD"
+      }
+    }
+  ]
+}

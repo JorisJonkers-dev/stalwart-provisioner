@@ -1,0 +1,42 @@
+{
+  "schemaVersion": "stalwart-provisioner/v2",
+  "domain": {
+    "name": "example.test",
+    "publicHostname": "mail.example.test"
+  },
+  "dkim": {
+    "enabled": true,
+    "mode": "automatic",
+    "selectorTemplate": "v{version}-{algorithm}-{date-%Y%m%d}",
+    "algorithms": ["Dkim1Ed25519Sha256", "Dkim1RsaSha256"]
+  },
+  "dns": {
+    "mode": "consumer-managed",
+    "publicationOutputFile": "/tmp/stalwart-dns-requirements.txt"
+  },
+  "preExistingAccounts": ["postmaster"],
+  "managedAccounts": [
+    {
+      "localPart": "env-account",
+      "passwordRef": {
+        "envVar": "EXAMPLE_ENV_ACCOUNT_PASSWORD"
+      },
+      "aliases": ["smtp-env"],
+      "groups": ["postmaster"]
+    },
+    {
+      "localPart": "file-account",
+      "passwordRef": {
+        "file": "/run/secrets/example-file-account-password"
+      }
+    },
+    {
+      "localPart": "vault-account",
+      "passwordRef": {
+        "vaultPath": "kv/data/example/stalwart/vault-account",
+        "file": "/run/secrets/example-vault-account-password",
+        "sourceIdentity": "vso:example-vault-account"
+      }
+    }
+  ]
+}

@@ -1,0 +1,181 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.extratoast.dev/stalwart-provisioner/provisioning-manifest.v2.schema.json",
+  "title": "Stalwart Provisioner Manifest v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "domain", "managedAccounts"],
+  "properties": {
+    "schemaVersion": {
+      "const": "stalwart-provisioner/v2"
+    },
+    "domain": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "publicHostname"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "minLength": 1
+        },
+        "publicHostname": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "dkim": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "mode": {
+          "type": "string",
+          "enum": ["automatic", "manual"],
+          "default": "automatic"
+        },
+        "selectorTemplate": {
+          "type": "string",
+          "minLength": 1
+        },
+        "algorithms": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": ["Dkim1Ed25519Sha256", "Dkim1RsaSha256"]
+          }
+        },
+        "rotateAfterMillis": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "retireAfterMillis": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "deleteAfterMillis": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "dns": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": ["consumer-managed"],
+          "default": "consumer-managed"
+        },
+        "publicationOutputFile": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "preExistingAccounts": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/localPart"
+      }
+    },
+    "managedAccounts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["localPart", "passwordRef"],
+        "properties": {
+          "localPart": {
+            "$ref": "#/$defs/localPart"
+          },
+          "description": {
+            "type": "string"
+          },
+          "passwordRef": {
+            "$ref": "#/$defs/passwordRef"
+          },
+          "aliases": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/localPart"
+            }
+          },
+          "groups": {
+            "type": "array",
+            "uniqueItems": true,
+            "items": {
+              "$ref": "#/$defs/localPart"
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "localPart": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 64,
+      "pattern": "^(?!.*\\.\\.)(?!.*@)[A-Za-z0-9!#$%&'*+/=?^_`{|}~-](?:[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]{0,62}[A-Za-z0-9!#$%&'*+/=?^_`{|}~-])?$"
+    },
+    "absolutePath": {
+      "type": "string",
+      "pattern": "^/[^\\u0000]*$"
+    },
+    "envVar": {
+      "type": "string",
+      "pattern": "^[A-Za-z_][A-Za-z0-9_]*$"
+    },
+    "passwordRef": {
+      "type": "object",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["envVar"],
+          "properties": {
+            "envVar": {
+              "$ref": "#/$defs/envVar"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["file"],
+          "properties": {
+            "file": {
+              "$ref": "#/$defs/absolutePath"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["vaultPath", "file", "sourceIdentity"],
+          "properties": {
+            "vaultPath": {
+              "type": "string",
+              "minLength": 1
+            },
+            "file": {
+              "$ref": "#/$defs/absolutePath"
+            },
+            "sourceIdentity": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        }
+      ]
+    }
+  }
+}

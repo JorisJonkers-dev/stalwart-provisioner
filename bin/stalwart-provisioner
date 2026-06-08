@@ -1,0 +1,592 @@
+#!/usr/bin/env python3
+"""Offline validation entrypoint for Stalwart provisioning artifacts."""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import re
+import sys
+from pathlib import Path
+from typing import Any
+
+MANIFEST_VERSION = "stalwart-provisioner/v2"
+PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
+LOCAL_PART = re.compile(r"^(?!\.)(?!.*\.\.)(?!.*@)[A-Za-z0-9!#$%&'*+/=?^_`{|}~.-]{1,64}(?<!\.)$")
+ENV_VAR = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*$")
+HOSTNAME = re.compile(
+    r"^(?=.{1,253}$)([A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?\.)+"
+    r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?$"
+)
+RAW_PASSWORD_KEYS = {"password", "passwordvalue", "plainpassword", "rawpassword", "secret"}
+DKIM_ALGORITHMS = {"Dkim1Ed25519Sha256", "Dkim1RsaSha256"}
+
+
+def load_json(path: str) -> tuple[Any | None, list[str]]:
+    try:
+        with open(path, encoding="utf-8") as handle:
+            return json.load(handle), []
+    except FileNotFoundError:
+        return None, [f"{path}: file not found"]
+    except json.JSONDecodeError as exc:
+        return None, [f"{path}:{exc.lineno}:{exc.colno}: invalid JSON: {exc.msg}"]
+
+
+def display_path(root: str, field: str | int) -> str:
+    if isinstance(field, int):
+        return f"{root}[{field}]"
+    if not root:
+        return f"$.{field}"
+    return f"{root}.{field}"
+
+
+class ManifestValidator:
+    def __init__(self, path: str, check_password_sources: bool = False):
+        self.path = path
+        self.check_password_sources = check_password_sources
+        self.errors: list[str] = []
+
+    def err(self, where: str, message: str) -> None:
+        self.errors.append(f"{where}: {message}")
+
+    def validate(self) -> list[str]:
+        doc, load_errors = load_json(self.path)
+        if load_errors:
+            return load_errors
+        if not isinstance(doc, dict):
+            return ["$: manifest must be a JSON object"]
+
+        allowed_top_level = {
+            "schemaVersion",
+            "domain",
+            "dkim",
+            "dns",
+            "preExistingAccounts",
+            "managedAccounts",
+        }
+        for key in doc:
+            if key not in allowed_top_level:
+                self.err(display_path("$", key), "unknown field")
+
+        self.reject_raw_password_fields(doc, "$")
+        self.validate_schema_version(doc)
+        domain = self.validate_domain(doc.get("domain"), "$.domain")
+        pre_existing = self.validate_pre_existing(doc.get("preExistingAccounts", []))
+        local_parts = self.validate_accounts(doc.get("managedAccounts"), pre_existing)
+        self.validate_dkim(doc.get("dkim", {}), "$.dkim")
+        self.validate_dns(doc.get("dns", {}), "$.dns")
+
+        if domain and not local_parts:
+            return self.errors
+        return self.errors
+
+    def reject_raw_password_fields(self, node: Any, where: str) -> None:
+        if isinstance(node, dict):
+            for key, value in node.items():
+                normalized = re.sub(r"[-_\s]", "", key).lower()
+                child = display_path(where, key)
+                if normalized in RAW_PASSWORD_KEYS:
+                    self.err(child, "raw password or secret values are not allowed in manifests")
+                self.reject_raw_password_fields(value, child)
+        elif isinstance(node, list):
+            for idx, value in enumerate(node):
+                self.reject_raw_password_fields(value, display_path(where, idx))
+
+    def validate_schema_version(self, doc: dict[str, Any]) -> None:
+        version = doc.get("schemaVersion")
+        if version is None:
+            self.err("$.schemaVersion", "field is required")
+        elif version != MANIFEST_VERSION:
+            self.err("$.schemaVersion", f"must be {MANIFEST_VERSION!r}")
+
+    def validate_domain(self, domain: Any, where: str) -> dict[str, str] | None:
+        if not isinstance(domain, dict):
+            self.err(where, "field is required and must be an object")
+            return None
+        result: dict[str, str] = {}
+        for key in ("name", "publicHostname"):
+            value = domain.get(key)
+            field = display_path(where, key)
+            if not isinstance(value, str) or not value:
+                self.err(field, "must be a non-empty string")
+            elif not HOSTNAME.fullmatch(value):
+                self.err(field, "must be a valid DNS hostname")
+            else:
+                result[key] = value
+        for key in domain:
+            if key not in {"name", "publicHostname"}:
+                self.err(display_path(where, key), "unknown field")
+        return result
+
+    def validate_pre_existing(self, value: Any) -> set[str]:
+        if not isinstance(value, list):
+            self.err("$.preExistingAccounts", "must be an array when present")
+            return set()
+        seen: set[str] = set()
+        for idx, item in enumerate(value):
+            path = f"$.preExistingAccounts[{idx}]"
+            if not self.valid_local_part(item, path):
+                continue
+            lowered = item.lower()
+            if lowered in seen:
+                self.err(path, "duplicates another pre-existing account local part")
+            seen.add(lowered)
+        return seen
+
+    def validate_accounts(self, accounts: Any, pre_existing: set[str]) -> set[str]:
+        if not isinstance(accounts, list):
+            self.err("$.managedAccounts", "field is required and must be an array")
+            return set()
+
+        local_parts: set[str] = set()
+        account_paths: dict[str, str] = {}
+        alias_owner: dict[str, str] = {}
+
+        for idx, account in enumerate(accounts):
+            path = f"$.managedAccounts[{idx}]"
+            if not isinstance(account, dict):
+                self.err(path, "must be an object")
+                continue
+
+            allowed = {"localPart", "description", "passwordRef", "aliases", "groups"}
+            for key in account:
+                if key not in allowed:
+                    self.err(display_path(path, key), "unknown field")
+
+            local_part = account.get("localPart")
+            if self.valid_local_part(local_part, f"{path}.localPart"):
+                lowered = local_part.lower()
+                if lowered in local_parts:
+                    self.err(f"{path}.localPart", f"duplicates {account_paths[lowered]}")
+                local_parts.add(lowered)
+                account_paths.setdefault(lowered, f"{path}.localPart")
+
+            if "passwordRef" not in account:
+                self.err(f"{path}.passwordRef", "field is required")
+            else:
+                self.validate_password_ref(account.get("passwordRef"), f"{path}.passwordRef")
+
+        allowed_groups = local_parts | pre_existing
+        for idx, account in enumerate(accounts):
+            if not isinstance(account, dict):
+                continue
+            path = f"$.managedAccounts[{idx}]"
+            local_part = account.get("localPart")
+            lowered_local = local_part.lower() if isinstance(local_part, str) else None
+
+            aliases = account.get("aliases", [])
+            if aliases is None:
+                aliases = []
+            if not isinstance(aliases, list):
+                self.err(f"{path}.aliases", "must be an array when present")
+            else:
+                seen_aliases: set[str] = set()
+                for alias_idx, alias in enumerate(aliases):
+                    alias_path = f"{path}.aliases[{alias_idx}]"
+                    if not self.valid_local_part(alias, alias_path):
+                        continue
+                    lowered = alias.lower()
+                    if lowered in seen_aliases:
+                        self.err(alias_path, "duplicates another alias on this account")
+                    if lowered in local_parts:
+                        self.err(alias_path, "collides with a managed account local part")
+                    if lowered in alias_owner:
+                        self.err(alias_path, f"duplicates alias declared at {alias_owner[lowered]}")
+                    seen_aliases.add(lowered)
+                    alias_owner.setdefault(lowered, alias_path)
+
+            groups = account.get("groups", [])
+            if groups is None:
+                groups = []
+            if not isinstance(groups, list):
+                self.err(f"{path}.groups", "must be an array when present")
+            else:
+                seen_groups: set[str] = set()
+                for group_idx, group in enumerate(groups):
+                    group_path = f"{path}.groups[{group_idx}]"
+                    if not self.valid_local_part(group, group_path):
+                        continue
+                    lowered = group.lower()
+                    if lowered == lowered_local:
+                        self.err(group_path, "account cannot be a member of itself")
+                    if lowered in seen_groups:
+                        self.err(group_path, "duplicates another group on this account")
+                    if lowered not in allowed_groups:
+                        self.err(group_path, "must reference a managed or pre-existing account")
+                    seen_groups.add(lowered)
+
+        return local_parts
+
+    def valid_local_part(self, value: Any, where: str) -> bool:
+        if not isinstance(value, str) or not value:
+            self.err(where, "must be a non-empty string")
+            return False
+        if not LOCAL_PART.fullmatch(value):
+            self.err(where, "must be a valid email local part")
+            return False
+        return True
+
+    def validate_password_ref(self, ref: Any, where: str) -> None:
+        if not isinstance(ref, dict):
+            self.err(where, "must be an object")
+            return
+
+        variants: list[str] = []
+        if "envVar" in ref:
+            variants.append("envVar")
+        if "vaultPath" in ref:
+            variants.append("vaultPath")
+        elif "file" in ref:
+            variants.append("file")
+
+        if len(variants) != 1:
+            self.err(where, "must declare exactly one password source variant: envVar, file, or vaultPath")
+            allowed = {"envVar", "file", "vaultPath", "sourceIdentity"}
+        elif variants[0] == "envVar":
+            allowed = {"envVar"}
+            self.validate_env_ref(ref.get("envVar"), f"{where}.envVar")
+        elif variants[0] == "file":
+            allowed = {"file"}
+            self.validate_file_ref(ref.get("file"), f"{where}.file")
+        else:
+            allowed = {"vaultPath", "file", "sourceIdentity"}
+            self.validate_non_empty_string(ref.get("vaultPath"), f"{where}.vaultPath")
+            self.validate_non_empty_string(ref.get("sourceIdentity"), f"{where}.sourceIdentity")
+            self.validate_file_ref(ref.get("file"), f"{where}.file")
+
+        for key in ref:
+            if key not in allowed:
+                self.err(display_path(where, key), "unknown field for selected password source variant")
+
+    def validate_env_ref(self, value: Any, where: str) -> None:
+        if not isinstance(value, str) or not ENV_VAR.fullmatch(value):
+            self.err(where, "must be a valid environment variable name")
+            return
+        if self.check_password_sources and not os.environ.get(value):
+            self.err(where, "referenced environment variable is unset or empty")
+
+    def validate_file_ref(self, value: Any, where: str) -> None:
+        if not isinstance(value, str) or not value.startswith("/"):
+            self.err(where, "must be an absolute mounted file path")
+            return
+        if self.check_password_sources:
+            path = Path(value)
+            try:
+                secret = path.read_bytes().rstrip(b"\r\n")
+            except OSError:
+                self.err(where, "referenced password file is missing or unreadable")
+                return
+            if not secret:
+                self.err(where, "referenced password file is empty")
+
+    def validate_non_empty_string(self, value: Any, where: str) -> None:
+        if not isinstance(value, str) or not value:
+            self.err(where, "must be a non-empty string")
+
+    def validate_dkim(self, value: Any, where: str) -> None:
+        if value == {}:
+            return
+        if not isinstance(value, dict):
+            self.err(where, "must be an object when present")
+            return
+        allowed = {
+            "enabled",
+            "mode",
+            "selectorTemplate",
+            "algorithms",
+            "rotateAfterMillis",
+            "retireAfterMillis",
+            "deleteAfterMillis",
+        }
+        for key in value:
+            if key not in allowed:
+                self.err(display_path(where, key), "unknown field")
+        if "enabled" in value and not isinstance(value["enabled"], bool):
+            self.err(f"{where}.enabled", "must be a boolean")
+        if value.get("mode", "automatic") not in {"automatic", "manual"}:
+            self.err(f"{where}.mode", "must be 'automatic' or 'manual'")
+        if "selectorTemplate" in value:
+            self.validate_non_empty_string(value["selectorTemplate"], f"{where}.selectorTemplate")
+        for field in ("rotateAfterMillis", "retireAfterMillis", "deleteAfterMillis"):
+            if field in value and (not isinstance(value[field], int) or value[field] <= 0):
+                self.err(f"{where}.{field}", "must be a positive integer")
+        algorithms = value.get("algorithms", [])
+        if algorithms:
+            if not isinstance(algorithms, list):
+                self.err(f"{where}.algorithms", "must be an array")
+            else:
+                seen: set[str] = set()
+                for idx, algorithm in enumerate(algorithms):
+                    path = f"{where}.algorithms[{idx}]"
+                    if algorithm not in DKIM_ALGORITHMS:
+                        self.err(path, "must be a supported Stalwart DKIM algorithm")
+                    if algorithm in seen:
+                        self.err(path, "duplicates another DKIM algorithm")
+                    seen.add(algorithm)
+
+    def validate_dns(self, value: Any, where: str) -> None:
+        if value == {}:
+            return
+        if not isinstance(value, dict):
+            self.err(where, "must be an object when present")
+            return
+        allowed = {"mode", "publicationOutputFile"}
+        for key in value:
+            if key not in allowed:
+                self.err(display_path(where, key), "unknown field")
+        if value.get("mode", "consumer-managed") != "consumer-managed":
+            self.err(f"{where}.mode", "must be 'consumer-managed'")
+        if "publicationOutputFile" in value:
+            self.validate_non_empty_string(value["publicationOutputFile"], f"{where}.publicationOutputFile")
+
+
+class PlanValidator:
+    def __init__(self, schema: dict[str, Any]):
+        self.schemas = schema["schemas"]
+        self.fields = schema["fields"]
+        self.enums = schema["enums"]
+        self.errors: list[str] = []
+
+    def err(self, where: str, message: str) -> None:
+        self.errors.append(f"{where}: {message}")
+
+    def props_for_schema_name(self, schema_name: str) -> dict[str, Any]:
+        return self.fields.get(schema_name, {}).get("properties", {})
+
+    def resolve(self, object_name: str, value: Any, where: str, allow_partial_union: bool = False) -> dict[str, Any] | None:
+        schema = self.schemas.get(object_name)
+        if schema is None:
+            self.err(where, f"unknown object/schema {object_name!r}")
+            return None
+        if schema.get("type") == "single":
+            return self.props_for_schema_name(schema["schemaName"])
+        if schema.get("type") == "multiple":
+            tag = value.get("@type") if isinstance(value, dict) else None
+            if tag is None and allow_partial_union:
+                merged: dict[str, Any] = {}
+                for variant in schema["variants"]:
+                    schema_name = variant.get("schemaName")
+                    if schema_name:
+                        merged.update(self.props_for_schema_name(schema_name))
+                return merged
+            if tag is None:
+                self.err(where, f"{object_name} requires a @type discriminator")
+                return None
+            variant = next((item for item in schema["variants"] if item["name"] == tag), None)
+            if variant is None:
+                names = ", ".join(item["name"] for item in schema["variants"])
+                self.err(where, f"{object_name}: unknown @type {tag!r} (valid: {names})")
+                return None
+            return self.props_for_schema_name(variant.get("schemaName", ""))
+        return None
+
+    def check_enum(self, enum_name: str, value: Any, where: str) -> None:
+        variants = self.enums.get(enum_name)
+        if variants is None:
+            return
+        names = {variant["name"] for variant in variants}
+        if value not in names:
+            self.err(where, f"invalid {enum_name} value {value!r} (valid: {', '.join(sorted(names))})")
+
+    def check_value(self, type_def: dict[str, Any], value: Any, where: str) -> None:
+        if value is None and type_def.get("nullable"):
+            return
+        if isinstance(value, str) and PLACEHOLDER.fullmatch(value):
+            return
+
+        kind = type_def.get("type")
+        if kind == "enum":
+            if isinstance(value, str):
+                self.check_enum(type_def["enumName"], value, where)
+        elif kind == "object":
+            if isinstance(value, dict):
+                self.check_object(type_def["objectName"], value, where)
+            else:
+                self.err(where, "must be an object")
+        elif kind == "objectList":
+            self.check_object_list(type_def.get("objectName", ""), value, where)
+        elif kind == "set":
+            cls = type_def.get("class", {})
+            members = value.keys() if isinstance(value, dict) else (value if isinstance(value, list) else [])
+            for member in members:
+                self.check_value(cls, member, where)
+        elif kind == "list":
+            cls = type_def.get("class", {})
+            if isinstance(value, list):
+                for idx, member in enumerate(value):
+                    self.check_value(cls, member, f"{where}[{idx}]")
+        elif kind == "map":
+            key_cls = type_def.get("keyClass", {})
+            value_cls = type_def.get("valueClass", {})
+            if isinstance(value, dict):
+                for key, member in value.items():
+                    self.check_value(key_cls, key, f"{where}.{key}")
+                    self.check_value(value_cls, member, f"{where}.{key}")
+
+    def check_object_list(self, object_name: str, value: Any, where: str) -> None:
+        if isinstance(value, dict):
+            for key, member in value.items():
+                self.check_object(object_name, member, f"{where}.{key}")
+        elif isinstance(value, list):
+            for idx, member in enumerate(value):
+                self.check_object(object_name, member, f"{where}[{idx}]")
+        else:
+            self.err(where, "must be an object-list map or array")
+
+    def check_object(self, object_name: str, value: Any, where: str, allow_partial_union: bool = False) -> None:
+        props = self.resolve(object_name, value, where, allow_partial_union=allow_partial_union)
+        if props is None:
+            return
+        for key, member in value.items():
+            if key == "@type":
+                continue
+            if isinstance(member, str) and member.startswith("#"):
+                if key not in props:
+                    self.err(where, f"unknown field {key!r} on {object_name}")
+                continue
+            field_def = props.get(key)
+            if field_def is None:
+                self.err(where, f"unknown field {key!r} on {object_name} (valid: {', '.join(sorted(props))})")
+                continue
+            self.check_value(field_def.get("type", {}), member, f"{where}.{key}")
+
+    def check_op(self, op: Any, where: str) -> None:
+        if not isinstance(op, dict):
+            self.err(where, "operation must be a JSON object")
+            return
+        kind = op.get("@type")
+        obj = op.get("object")
+        if kind not in ("create", "update", "destroy"):
+            self.err(where, f"unknown op @type {kind!r}")
+            return
+        if obj is None:
+            self.err(where, "missing 'object'")
+            return
+        object_name = "x:" + obj
+        if object_name not in self.schemas:
+            self.err(where, f"unknown object {obj!r}")
+            return
+        if kind == "destroy":
+            return
+        value = op.get("value", {})
+        if kind == "update":
+            self.check_object(object_name, value, where, allow_partial_union=True)
+            return
+        if not isinstance(value, dict):
+            self.err(where, "create value must be a map of create-id -> record")
+            return
+        for create_id, record in value.items():
+            self.check_object(object_name, record, f"{where}[{create_id}]")
+
+
+def validate_manifest(args: argparse.Namespace) -> int:
+    exit_code = 0
+    for path in args.manifests:
+        validator = ManifestValidator(path, check_password_sources=args.check_password_sources)
+        errors = validator.validate()
+        if errors:
+            print(f"FAIL {path}:")
+            for error in errors:
+                print(f"  {error}")
+            exit_code = 1
+        else:
+            print(f"OK   {path}")
+    return exit_code
+
+
+def validate_plan(args: argparse.Namespace) -> int:
+    schema, load_errors = load_json(args.schema)
+    if load_errors:
+        for error in load_errors:
+            print(error, file=sys.stderr)
+        return 2
+    if not isinstance(schema, dict):
+        print(f"{args.schema}: schema must be a JSON object", file=sys.stderr)
+        return 2
+
+    exit_code = 0
+    for path in args.plans:
+        validator = PlanValidator(schema)
+        try:
+            handle = open(path, encoding="utf-8")
+        except OSError as exc:
+            print(f"FAIL {path}:")
+            print(f"  {path}: {exc.strerror}")
+            exit_code = 1
+            continue
+        with handle:
+            for line_number, line in enumerate(handle, 1):
+                stripped = line.strip()
+                if not stripped:
+                    continue
+                stripped = PLACEHOLDER.sub("__PLACEHOLDER__", stripped)
+                try:
+                    op = json.loads(stripped)
+                except json.JSONDecodeError as exc:
+                    validator.err(f"{path}:{line_number}", f"invalid JSON: {exc.msg}")
+                    continue
+                validator.check_op(op, f"{path}:{line_number}")
+        if validator.errors:
+            print(f"FAIL {path}:")
+            for error in validator.errors:
+                print(f"  {error}")
+            exit_code = 1
+        else:
+            print(f"OK   {path}")
+    return exit_code
+
+
+def default_schema_path() -> str:
+    env_path = os.environ.get("STALWART_SCHEMA")
+    if env_path:
+        return env_path
+    candidates = [
+        Path(__file__).resolve().parents[1] / "schema" / "schema.min.json",
+        Path("/opt/stalwart-provisioner/schema/schema.min.json"),
+        Path("schema/schema.min.json"),
+    ]
+    for candidate in candidates:
+        if candidate.exists():
+            return str(candidate)
+    return str(candidates[-1])
+
+
+def build_parser() -> argparse.ArgumentParser:
+    parser = argparse.ArgumentParser(prog="stalwart-provisioner")
+    subparsers = parser.add_subparsers(dest="command", required=True)
+
+    validate = subparsers.add_parser("validate", help="validate manifests or Stalwart apply plans")
+    validate_sub = validate.add_subparsers(dest="target", required=True)
+
+    manifest = validate_sub.add_parser("manifest", help="validate v2 provisioning manifests")
+    manifest.add_argument("--check-password-sources", action="store_true")
+    manifest.add_argument("manifests", nargs="+")
+    manifest.set_defaults(func=validate_manifest)
+
+    plan = validate_sub.add_parser("plan", help="validate Stalwart apply NDJSON plans")
+    plan.add_argument("--schema", default=default_schema_path())
+    plan.add_argument("plans", nargs="+")
+    plan.set_defaults(func=validate_plan)
+
+    validate_manifest_short = subparsers.add_parser("validate-manifest", help="validate v2 provisioning manifests")
+    validate_manifest_short.add_argument("--check-password-sources", action="store_true")
+    validate_manifest_short.add_argument("manifests", nargs="+")
+    validate_manifest_short.set_defaults(func=validate_manifest)
+
+    validate_plan_short = subparsers.add_parser("validate-plan", help="validate Stalwart apply NDJSON plans")
+    validate_plan_short.add_argument("--schema", default=default_schema_path())
+    validate_plan_short.add_argument("plans", nargs="+")
+    validate_plan_short.set_defaults(func=validate_plan)
+
+    return parser
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = build_parser()
+    args = parser.parse_args(argv)
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())

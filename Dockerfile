@@ -2,7 +2,7 @@ FROM alpine:3.21
 
 ARG STALWART_CLI_VERSION=1.0.7
 
-LABEL org.opencontainers.image.source="https://github.com/ExtraToast/stalwart-provisioner"
+LABEL org.opencontainers.image.source="https://github.com/JorisJonkers-dev/stalwart-provisioner"
 LABEL org.opencontainers.image.description="Schema-driven Stalwart account and DKIM provisioner"
 
 RUN apk add --no-cache ca-certificates curl gettext jq python3 tar xz \

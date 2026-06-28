@@ -8,8 +8,9 @@ import json
 import os
 import re
 import sys
+from collections.abc import Callable
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
 MANIFEST_VERSION = "stalwart-provisioner/v2"
 PLACEHOLDER = re.compile(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}")
@@ -156,6 +157,7 @@ class ManifestValidator:
 
             local_part = account.get("localPart")
             if self.valid_local_part(local_part, f"{path}.localPart"):
+                assert isinstance(local_part, str)
                 lowered = local_part.lower()
                 if lowered in local_parts:
                     self.err(f"{path}.localPart", f"duplicates {account_paths[lowered]}")
@@ -343,16 +345,17 @@ class ManifestValidator:
 
 class PlanValidator:
     def __init__(self, schema: dict[str, Any]):
-        self.schemas = schema["schemas"]
-        self.fields = schema["fields"]
-        self.enums = schema["enums"]
+        self.schemas: dict[str, Any] = cast(dict[str, Any], schema["schemas"])
+        self.fields: dict[str, Any] = cast(dict[str, Any], schema["fields"])
+        self.enums: dict[str, Any] = cast(dict[str, Any], schema["enums"])
         self.errors: list[str] = []
 
     def err(self, where: str, message: str) -> None:
         self.errors.append(f"{where}: {message}")
 
     def props_for_schema_name(self, schema_name: str) -> dict[str, Any]:
-        return self.fields.get(schema_name, {}).get("properties", {})
+        schema_fields = self.fields.get(schema_name, {})
+        return cast(dict[str, Any], schema_fields.get("properties", {}))
 
     def resolve(self, object_name: str, value: Any, where: str, allow_partial_union: bool = False) -> dict[str, Any] | None:
         schema = self.schemas.get(object_name)
@@ -585,7 +588,8 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    return args.func(args)
+    func = cast(Callable[[argparse.Namespace], int], args.func)
+    return func(args)
 
 
 if __name__ == "__main__":

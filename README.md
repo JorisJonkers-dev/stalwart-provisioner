@@ -9,7 +9,7 @@ manifest contract, the Stalwart `apply` plan validator, the reconcile scripts,
 and the image published as:
 
 ```text
-ghcr.io/extratoast/stalwart-provisioner:<version>
+ghcr.io/jorisjonkers-dev/stalwart-provisioner:<version>
 ```
 
 ## Manifest Contract

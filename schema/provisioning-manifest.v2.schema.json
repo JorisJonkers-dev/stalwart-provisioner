@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://schemas.extratoast.dev/stalwart-provisioner/provisioning-manifest.v2.schema.json",
+  "$id": "https://schemas.jorisjonkers.dev/stalwart-provisioner/provisioning-manifest.v2.schema.json",
   "title": "Stalwart Provisioner Manifest v2",
   "type": "object",
   "additionalProperties": false,

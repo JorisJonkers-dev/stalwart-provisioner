@@ -2,11 +2,11 @@
 
 ## Overview
 
-ExtraToast/stalwart-provisioner defines schema-driven Stalwart mail account and DKIM provisioning as a reusable release artifact. The feature extracts the account, DKIM, bootstrap, reconcile, and plan-validation contract currently represented by the read-only reference material under `/workspace/personal-stack/infra/stalwart` into a product specification for this repository.
+JorisJonkers-dev/stalwart-provisioner defines schema-driven Stalwart mail account and DKIM provisioning as a reusable release artifact. The feature extracts the account, DKIM, bootstrap, reconcile, and plan-validation contract currently represented by the read-only reference material under `/workspace/personal-stack/infra/stalwart` into a product specification for this repository.
 
 The product exists so consumer repositories can stop baking shared Stalwart provisioning behavior into their own source trees while still keeping domain-specific ownership local. Each consumer, including `personal-stack` and/or `website`, owns its mail domain, account list, DNS configuration, secret storage, and deployment wiring. This repository owns the versioned provisioning contract, the distributable GHCR runtime image, and the plan-validation command-line interface.
 
-Distribution is intended to be artifact based: consumers reference a short, versioned coordinate such as `ghcr.io/extratoast/stalwart-provisioner:<version>` and pin that version through Renovate-managed updates. No doubled plugin-marker names are allowed in package, image, or artifact coordinates. `personal-stack` remains continuously auto-deployed and is not itself turned into a versioned product.
+Distribution is intended to be artifact based: consumers reference a short, versioned coordinate such as `ghcr.io/jorisjonkers-dev/stalwart-provisioner:<version>` and pin that version through Renovate-managed updates. No doubled plugin-marker names are allowed in package, image, or artifact coordinates. `personal-stack` remains continuously auto-deployed and is not itself turned into a versioned product.
 
 ## User Scenarios
 

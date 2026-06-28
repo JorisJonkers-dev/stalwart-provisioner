@@ -5,8 +5,13 @@ out/
 target/
 .gradle/
 node_modules/
+.venv/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 __pycache__/
 *.py[cod]
+*.egg-info/
 
 # Env / secrets (never commit)
 .env

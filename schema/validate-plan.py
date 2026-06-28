@@ -15,7 +15,10 @@ def main() -> int:
     if len(sys.argv) < 3:
         return subprocess.call([str(cli), "validate-plan", "--help"])
     env = os.environ.copy()
-    return subprocess.call([str(cli), "validate-plan", "--schema", sys.argv[1], *sys.argv[2:]], env=env)
+    return subprocess.call(
+        [str(cli), "validate-plan", "--schema", sys.argv[1], *sys.argv[2:]],
+        env=env,
+    )
 
 
 if __name__ == "__main__":

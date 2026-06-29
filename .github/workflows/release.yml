@@ -3,6 +3,12 @@ name: Release
 on:
   push:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Release tag to publish, for example v0.2.0
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -10,6 +16,7 @@ permissions:
 
 jobs:
   release-please:
+    if: ${{ github.event_name == 'push' }}
     runs-on: ubuntu-latest
     outputs:
       release_created: ${{ steps.release.outputs.release_created }}
@@ -32,10 +39,41 @@ jobs:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
 
+  publish-target:
+    name: Resolve Publish Target
+    needs: release-please
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    outputs:
+      should_publish: ${{ steps.target.outputs.should_publish }}
+      tag_name: ${{ steps.target.outputs.tag_name }}
+    steps:
+      - id: target
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          INPUT_RELEASE_TAG: ${{ inputs.release_tag }}
+          RELEASE_CREATED: ${{ needs.release-please.outputs.release_created }}
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
+            if [ -z "$INPUT_RELEASE_TAG" ]; then
+              echo "release_tag is required for workflow_dispatch" >&2
+              exit 1
+            fi
+            echo "should_publish=true" >>"$GITHUB_OUTPUT"
+            echo "tag_name=$INPUT_RELEASE_TAG" >>"$GITHUB_OUTPUT"
+          elif [ "$RELEASE_CREATED" = "true" ]; then
+            echo "should_publish=true" >>"$GITHUB_OUTPUT"
+            echo "tag_name=$RELEASE_TAG" >>"$GITHUB_OUTPUT"
+          else
+            echo "should_publish=false" >>"$GITHUB_OUTPUT"
+            echo "tag_name=" >>"$GITHUB_OUTPUT"
+          fi
+
   publish:
     name: Publish GHCR Image
-    needs: release-please
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    needs: publish-target
+    if: ${{ needs.publish-target.outputs.should_publish == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -43,7 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.publish-target.outputs.tag_name }}
       - name: Log in to GHCR
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -51,7 +89,7 @@ jobs:
       - name: Build and push image
         env:
           IMAGE: ghcr.io/jorisjonkers-dev/stalwart-provisioner
-          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+          RELEASE_TAG: ${{ needs.publish-target.outputs.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
           commit_sha="$(git rev-parse HEAD)"
@@ -62,8 +100,8 @@ jobs:
 
   publish-deploy-bundle:
     name: Publish Deploy Bundle
-    needs: [release-please, publish]
-    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    needs: [publish-target, publish]
+    if: ${{ needs.publish-target.outputs.should_publish == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -71,14 +109,14 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
-          ref: ${{ needs.release-please.outputs.tag_name }}
+          ref: ${{ needs.publish-target.outputs.tag_name }}
       - uses: oras-project/setup-oras@v2
       - name: Pack deploy bundle
         env:
-          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+          RELEASE_TAG: ${{ needs.publish-target.outputs.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
-          python3 scripts/pack-deploy-bundle.py --version "$version" --out /tmp/stalwart-provisioner-deploy-bundle.tar
+          python3 scripts/pack-deploy-bundle.py --version "$version" --out stalwart-provisioner-deploy-bundle.tar
       - name: Log in to GHCR
         env:
           GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -86,7 +124,7 @@ jobs:
       - name: Publish deploy bundle
         env:
           BUNDLE: ghcr.io/jorisjonkers-dev/stalwart-provisioner-deploy-bundle
-          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+          RELEASE_TAG: ${{ needs.publish-target.outputs.tag_name }}
         run: |
           version="${RELEASE_TAG#v}"
-          oras push "${BUNDLE}:${version}" /tmp/stalwart-provisioner-deploy-bundle.tar:application/vnd.jorisjonkers.deployment.bundle.v1+tar
+          oras push "${BUNDLE}:${version}" stalwart-provisioner-deploy-bundle.tar:application/vnd.jorisjonkers.deployment.bundle.v1+tar

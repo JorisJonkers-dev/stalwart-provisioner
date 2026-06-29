@@ -73,7 +73,7 @@ jobs:
   publish:
     name: Publish GHCR Image
     needs: publish-target
-    if: ${{ needs.publish-target.outputs.should_publish == 'true' }}
+    if: ${{ always() && needs.publish-target.outputs.should_publish == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -101,7 +101,7 @@ jobs:
   publish-deploy-bundle:
     name: Publish Deploy Bundle
     needs: [publish-target, publish]
-    if: ${{ needs.publish-target.outputs.should_publish == 'true' }}
+    if: ${{ always() && needs.publish-target.outputs.should_publish == 'true' && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read

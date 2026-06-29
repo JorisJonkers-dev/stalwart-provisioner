@@ -19,14 +19,14 @@ jobs:
       # default GITHUB_TOKEN) so CI runs on the PR without a manual approval
       # gate. Best-effort: falls back to GITHUB_TOKEN when the App secrets or
       # installation are absent.
-      - uses: actions/create-github-app-token@v2
+      - uses: actions/create-github-app-token@v3
         id: app-token
         continue-on-error: true
         with:
           app-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - id: release
-        uses: googleapis/release-please-action@v4
+        uses: googleapis/release-please-action@v5
         with:
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
@@ -41,7 +41,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.release-please.outputs.tag_name }}
       - name: Log in to GHCR
@@ -59,3 +59,34 @@ jobs:
           docker push "${IMAGE}:${version}"
           docker push "${IMAGE}:sha-${commit_sha}"
           echo "Published ${IMAGE}:${version}"
+
+  publish-deploy-bundle:
+    name: Publish Deploy Bundle
+    needs: [release-please, publish]
+    if: ${{ needs.release-please.outputs.release_created == 'true' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release-please.outputs.tag_name }}
+      - uses: oras-project/setup-oras@v2
+      - name: Pack deploy bundle
+        env:
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          python3 scripts/pack-deploy-bundle.py --version "$version" --out /tmp/stalwart-provisioner-deploy-bundle.tar
+      - name: Log in to GHCR
+        env:
+          GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s\n' "$GHCR_TOKEN" | oras login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+      - name: Publish deploy bundle
+        env:
+          BUNDLE: ghcr.io/jorisjonkers-dev/stalwart-provisioner-deploy-bundle
+          RELEASE_TAG: ${{ needs.release-please.outputs.tag_name }}
+        run: |
+          version="${RELEASE_TAG#v}"
+          oras push "${BUNDLE}:${version}" /tmp/stalwart-provisioner-deploy-bundle.tar:application/vnd.jorisjonkers.deployment.bundle.v1+tar

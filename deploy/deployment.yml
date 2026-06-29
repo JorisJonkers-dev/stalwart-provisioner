@@ -1,0 +1,60 @@
+apiVersion: deployment.jorisjonkers.dev/v2
+kind: DeploymentProject
+name: stalwart-provisioner
+owner: JorisJonkers-dev/stalwart-provisioner
+namespace: mail-system
+group: mail
+fragment: true
+
+envFiles:
+  runtime: runtime.env
+  development: development.env
+  staging: staging.env
+  production: production.env
+
+workloads:
+  stalwart-provisioner:
+    type: job
+    account: stalwart-provisioner
+    priority: platform-maintenance
+    containers:
+      app:
+        image:
+          ref: ghcr.io/jorisjonkers-dev/stalwart-provisioner:${BUNDLE_VERSION}
+        command:
+          - /usr/local/bin/stalwart-provisioner-apply
+        env:
+          files:
+            - runtime
+            - env
+          vars:
+            STALWART_MANIFEST: /etc/stalwart-provisioner/manifest.json
+          secrets:
+            - name: stalwart-admin
+              keys:
+                - STALWART_URL
+                - STALWART_USER
+                - STALWART_PASSWORD
+            - name: stalwart-provisioner-manifest
+              keys:
+                - manifest.json
+        resources:
+          requests:
+            cpu: 25m
+            memory: 64Mi
+          limits:
+            cpu: 250m
+            memory: 256Mi
+    rollout:
+      strategy: replace
+      rollback: disabled
+    placement:
+      require:
+        sites:
+          - frankfurt
+
+safety:
+  gateOn:
+    - vaultSecretPathChange
+    - dynamicCredentialRoleChange
+    - routeOrAuthChange

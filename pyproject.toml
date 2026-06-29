@@ -1,6 +1,7 @@
 [project]
 name = "stalwart-provisioner"
 dynamic = ["version"]
+license = "LicenseRef-JorisJonkers-Proprietary-1.0"
 requires-python = ">=3.12"
 dependencies = []
 

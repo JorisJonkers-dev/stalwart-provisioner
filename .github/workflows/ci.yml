@@ -18,8 +18,8 @@ jobs:
     name: Python Lint / Typecheck / Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@v8.2.0
       - run: uv sync --frozen
       - run: uv run ruff check .
       - run: uv run mypy
@@ -29,12 +29,12 @@ jobs:
     name: Validate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Validate JSON and Python syntax
         run: |
           python3 -m json.tool schema/provisioning-manifest.v2.schema.json >/dev/null
           python3 -m json.tool schema/schema.min.json >/dev/null
-          python3 -m py_compile bin/stalwart-provisioner schema/validate-plan.py
+          python3 -m py_compile bin/stalwart-provisioner schema/validate-plan.py scripts/pack-deploy-bundle.py
       - name: Validate accepted fixtures
         run: |
           bin/stalwart-provisioner validate manifest examples/manifest.valid.json examples/dev-manifest.json
@@ -60,7 +60,7 @@ jobs:
     name: ShellCheck
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Install ShellCheck
         run: |
           if ! command -v shellcheck >/dev/null 2>&1; then
@@ -74,7 +74,7 @@ jobs:
     name: Workflow Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Download actionlint
         id: actionlint
         shell: bash
@@ -84,18 +84,28 @@ jobs:
         run: |
           "${{ steps.actionlint.outputs.executable }}" -color .github/workflows/*.yml
 
+  deploy-bundle:
+    name: Deploy Bundle
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Pack deploy bundle
+        run: python3 scripts/pack-deploy-bundle.py --version 0.0.0-ci --out /tmp/stalwart-provisioner-deploy-bundle.tar
+      - name: Inspect deploy bundle
+        run: tar -tf /tmp/stalwart-provisioner-deploy-bundle.tar
+
   docker-build:
     name: Docker Build
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Build image
         run: docker build .
 
   pipeline-complete:
     name: Pipeline Complete
     if: always()
-    needs: [python, validate, shellcheck, workflow-lint, docker-build]
+    needs: [python, validate, shellcheck, workflow-lint, deploy-bundle, docker-build]
     runs-on: ubuntu-latest
     steps:
       - name: Verify all gating jobs succeeded

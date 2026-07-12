@@ -79,7 +79,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.publish-target.outputs.tag_name }}
       - name: Log in to GHCR
@@ -98,8 +98,10 @@ jobs:
           docker push "${IMAGE}:sha-${commit_sha}"
           echo "Published ${IMAGE}:${version}"
 
+  # Legacy bundle publish — kept intact until Phase 3 removes deployment-sources.yml entry.
+  # homelab-deploy deployment-sources.yml still consumes this artifact.
   publish-deploy-bundle:
-    name: Publish Deploy Bundle
+    name: Publish Deploy Bundle (Legacy)
     needs: [publish-target, publish]
     if: ${{ always() && needs.publish-target.outputs.should_publish == 'true' && needs.publish.result == 'success' }}
     runs-on: ubuntu-latest
@@ -107,7 +109,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ needs.publish-target.outputs.tag_name }}
       - uses: oras-project/setup-oras@v2
@@ -128,3 +130,75 @@ jobs:
         run: |
           version="${RELEASE_TAG#v}"
           oras push "${BUNDLE}:${version}" stalwart-provisioner-deploy-bundle.tar:application/vnd.jorisjonkers.deployment.bundle.v1+tar
+
+  # Standard deploy-artifact pipeline — produces artifact-contract.yaml + cosign signature (SC-10).
+  # This artifact satisfies pull-artifacts.mjs contract checks for the registry path.
+  # deploy-config-schema must support healthClass: job (Phase 1 release) before this
+  # can produce a valid kustomization-health.yml for job workloads.
+  resolve-image-lock:
+    name: Resolve Image Lock
+    needs: [publish-target, publish]
+    if: ${{ always() && needs.publish-target.outputs.should_publish == 'true' && needs.publish.result == 'success' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: read
+    outputs:
+      images-lock-artifact: images-lock-${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ needs.publish-target.outputs.tag_name }}
+      - name: resolve-image-digest
+        id: digest
+        env:
+          GH_TOKEN: ${{ github.token }}
+          IMAGE: ghcr.io/jorisjonkers-dev/stalwart-provisioner
+          TAG: ${{ needs.publish-target.outputs.tag_name }}
+        run: |
+          set -euo pipefail
+          version="${TAG#v}"
+          printf '%s' "$GH_TOKEN" | docker login ghcr.io -u "$GITHUB_ACTOR" --password-stdin
+          digest="$(docker buildx imagetools inspect "${IMAGE}:${version}" --format '{{json .Manifest}}' | jq -r '.digest')"
+          if [ -z "$digest" ] || [ "$digest" = "null" ]; then
+            echo "E_FLOATING_IMAGE: could not resolve digest for ${IMAGE}:${version}" >&2
+            exit 1
+          fi
+          echo "image-digest=$digest" >> "$GITHUB_OUTPUT"
+      - name: lock-image
+        env:
+          IMAGE_DIGEST: ${{ steps.digest.outputs.image-digest }}
+        run: |
+          set -euo pipefail
+          case "$IMAGE_DIGEST" in
+            sha256:*) ;;
+            *) echo "E_FLOATING_IMAGE: IMAGE_DIGEST is not a digest ref" >&2; exit 1 ;;
+          esac
+          printf '{"stalwart-provisioner":"ghcr.io/jorisjonkers-dev/stalwart-provisioner@%s"}\n' "$IMAGE_DIGEST" \
+            > deploy/images.lock.json
+      - name: upload-image-lock
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: images-lock-${{ github.run_id }}
+          path: deploy/images.lock.json
+          retention-days: 1
+
+  publish-deploy-artifact:
+    name: Publish Deploy Artifact
+    needs: [publish-target, resolve-image-lock]
+    if: ${{ always() && needs.publish-target.outputs.should_publish == 'true' && needs.resolve-image-lock.result == 'success' }}
+    uses: JorisJonkers-dev/github-workflows/.github/workflows/deploy-artifact.yml@381d41e05b18fbb64aff7001e904f2f17abc2371 # v0.12.5
+    with:
+      ref: ${{ needs.publish-target.outputs.tag_name }}
+      artifact-name: stalwart-provisioner
+      artifact-version: ${{ needs.publish-target.outputs.tag_name }}
+      schema-version: 0.17.0
+      context-ref: ghcr.io/jorisjonkers-dev/cluster-deploy-context-public@sha256:64d00fe03a271dbd03a48005d0a0cc6cc5fe43df23c0e97b649c2f8b3e78b418
+      deploy-dir: deploy
+      image-lock-artifact: ${{ needs.resolve-image-lock.outputs.images-lock-artifact }}
+      environments: production
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write

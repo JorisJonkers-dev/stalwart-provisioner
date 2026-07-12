@@ -14,7 +14,10 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY_DIR = ROOT / "deploy"
-DEPLOYMENT = DEPLOY_DIR / "deployment.yml"
+# Legacy bundle source file. deploy/deployment.yml is now the v2-format file for the
+# standard deploy-artifact pipeline. This file retains the old DeploymentProject format
+# consumed by deployment-sources.yml until that path is retired in Phase 3.
+DEPLOYMENT = DEPLOY_DIR / "deployment.bundle.yml"
 ENV_FILES = (
     "runtime.env",
     "development.env",
@@ -34,7 +37,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 def validate_deploy_dir() -> None:
     if not DEPLOYMENT.is_file():
-        raise ValueError("deploy/deployment.yml is required")
+        raise ValueError("deploy/deployment.bundle.yml is required (legacy bundle source)")
 
     deployment = DEPLOYMENT.read_text(encoding="utf-8")
     required_fragments = [
@@ -46,7 +49,7 @@ def validate_deploy_dir() -> None:
     ]
     for fragment in required_fragments:
         if fragment not in deployment:
-            raise ValueError(f"deploy/deployment.yml missing {fragment!r}")
+            raise ValueError(f"deploy/deployment.bundle.yml missing {fragment!r}")
 
     for env_file in ENV_FILES:
         path = DEPLOY_DIR / env_file

@@ -192,7 +192,7 @@ jobs:
       ref: ${{ needs.publish-target.outputs.tag_name }}
       artifact-name: stalwart-provisioner
       artifact-version: ${{ needs.publish-target.outputs.tag_name }}
-      schema-version: 0.16.1
+      schema-version: 0.17.0
       context-ref: ghcr.io/jorisjonkers-dev/cluster-deploy-context-public@sha256:64d00fe03a271dbd03a48005d0a0cc6cc5fe43df23c0e97b649c2f8b3e78b418
       deploy-dir: deploy
       image-lock-artifact: ${{ needs.resolve-image-lock.outputs.images-lock-artifact }}

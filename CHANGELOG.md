@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.0](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.2.0...v0.3.0) (2026-07-12)
+
+
+### Features
+
+* add register-service job and bump schema-version to 0.18.0 ([#10](https://github.com/JorisJonkers-dev/stalwart-provisioner/issues/10)) ([9b70f0f](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/9b70f0fbd3cbccdadfe26dd7c0322626532dc6c9))
+* add standard deploy-artifact pipeline alongside legacy bundle publish ([565ab40](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/565ab40bb2ce3d85a35fed4e6d63ec242fd25448))
+
 ## [0.2.0](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.1.1...v0.2.0) (2026-06-29)
 
 

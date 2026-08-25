@@ -115,7 +115,11 @@ reconcile_dkim() {
     ' "$STALWART_MANIFEST"
   )"
 
-  [ -n "$dkim" ] || return
+  # return 0, not a bare return: a bare return propagates the status of the
+  # failed test, so under `set -e` an absent optional block aborts the whole
+  # reconcile with no message. A manifest omitting dkim exited 1 immediately
+  # after the domain-settings step, which reads as a mystery crash.
+  [ -n "$dkim" ] || return 0
   echo "apply: reconciling DKIM management for ${STALWART_DOMAIN}"
   jq -nc --arg domain_id "$domain_id" --argjson dkim "$dkim" \
     '{"@type":"update","object":"Domain","id":$domain_id,"value":{"dkimManagement":$dkim}}' \
@@ -129,7 +133,7 @@ reconcile_catch_all() {
   # outside this manifest -- by hand in webadmin, or by the env-driven
   # predecessor -- and silently removing it means mail to unknown local
   # recipients is dropped with nothing to explain why.
-  [ -n "${STALWART_CATCHALL:-}" ] || return
+  [ -n "${STALWART_CATCHALL:-}" ] || return 0
 
   # A separate partial update so it touches catchAllAddress alone and cannot
   # disturb the cert or DNS wiring on the same Domain object.
@@ -249,7 +253,7 @@ reconcile_account_metadata() {
 write_dns_requirements() {
   manifest_output="$(jq -r '.dns.publicationOutputFile // empty' "$STALWART_MANIFEST")"
   output_file="${STALWART_DNS_REQUIREMENTS_FILE:-$manifest_output}"
-  [ -n "$output_file" ] || return
+  [ -n "$output_file" ] || return 0
 
   zone_data="$(sc query Domain --json 2>/dev/null | jq -rs --arg name "$STALWART_DOMAIN" 'map(select(.name == $name))[0].dnsZoneFile // empty')"
   if [ -z "$zone_data" ]; then

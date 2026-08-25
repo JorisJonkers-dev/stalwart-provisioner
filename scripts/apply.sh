@@ -229,7 +229,9 @@ reconcile_account_metadata() {
     local_part="$(printf '%s' "$entry" | jq -r '.localPart')"
     has_aliases="$(printf '%s' "$entry" | jq -r 'has("aliases")')"
     has_groups="$(printf '%s' "$entry" | jq -r 'has("groups")')"
-    [ "$has_aliases" = "true" ] || [ "$has_groups" = "true" ] || continue
+    has_description="$(printf '%s' "$entry" | jq -r 'has("description")')"
+    [ "$has_aliases" = "true" ] || [ "$has_groups" = "true" ] \
+      || [ "$has_description" = "true" ] || continue
 
     fields="{}"
     if [ "$has_aliases" = "true" ]; then
@@ -239,6 +241,10 @@ reconcile_account_metadata() {
     if [ "$has_groups" = "true" ]; then
       groups="$(account_group_fields "$entry")"
       fields="$(printf '%s' "$fields" | jq -c --argjson groups "$groups" '. + {memberGroupIds:$groups}')"
+    fi
+    if [ "$has_description" = "true" ]; then
+      description="$(printf '%s' "$entry" | jq -r '.description')"
+      fields="$(printf '%s' "$fields" | jq -c --arg description "$description" '. + {description:$description}')"
     fi
 
     account_id="$(id_by_email "${local_part}@${STALWART_DOMAIN}")"

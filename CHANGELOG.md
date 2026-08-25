@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.4.0](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.3.0...v0.4.0) (2026-08-25)
+
+
+### Features
+
+* **manifest:** support a per-domain catch-all address ([#14](https://github.com/JorisJonkers-dev/stalwart-provisioner/issues/14)) ([33df5a1](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/33df5a18bf383355d3a9dd8a3af89cd8e666a718))
+
+
+### Bug Fixes
+
+* update context-ref to deploy-config-schema 0.18.0 compatible context ([#11](https://github.com/JorisJonkers-dev/stalwart-provisioner/issues/11)) ([b19c76c](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/b19c76cc52e60ecd99d5a3a42d8d21e139b8f9c5))
+
 ## [0.3.0](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.2.0...v0.3.0) (2026-07-12)
 
 

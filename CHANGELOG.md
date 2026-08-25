@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.4.1](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.4.0...v0.4.1) (2026-08-25)
+
+
+### Bug Fixes
+
+* **apply:** return 0 from optional-section guards ([#18](https://github.com/JorisJonkers-dev/stalwart-provisioner/issues/18)) ([22d1a72](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/22d1a72532585537286f109ffbfc02fd10e607b8))
+* **apply:** write managedAccounts description to Stalwart ([#19](https://github.com/JorisJonkers-dev/stalwart-provisioner/issues/19)) ([d0cfc9d](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/d0cfc9da091f0b28637bd1cea41fab3978637e49))
+* **deploy:** complete the deployment declaration so releases stop failing ([#16](https://github.com/JorisJonkers-dev/stalwart-provisioner/issues/16)) ([6be0157](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/6be0157d5c7ed9d8dee4e20b9e5f355d22f59931))
+
 ## [0.4.0](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.3.0...v0.4.0) (2026-08-25)
 
 

@@ -4,7 +4,11 @@
   "title": "Stalwart Provisioner Manifest v2",
   "type": "object",
   "additionalProperties": false,
-  "required": ["schemaVersion", "domain", "managedAccounts"],
+  "required": [
+    "schemaVersion",
+    "domain",
+    "managedAccounts"
+  ],
   "properties": {
     "schemaVersion": {
       "const": "stalwart-provisioner/v2"
@@ -12,7 +16,10 @@
     "domain": {
       "type": "object",
       "additionalProperties": false,
-      "required": ["name", "publicHostname"],
+      "required": [
+        "name",
+        "publicHostname"
+      ],
       "properties": {
         "name": {
           "type": "string",
@@ -21,6 +28,11 @@
         "publicHostname": {
           "type": "string",
           "minLength": 1
+        },
+        "catchAllAddress": {
+          "type": "string",
+          "minLength": 3,
+          "description": "Address receiving mail for unknown local recipients. Applied as a partial Domain update; omitted or empty is a no-op so a value set outside this manifest is never cleared."
         }
       }
     },
@@ -34,7 +46,10 @@
         },
         "mode": {
           "type": "string",
-          "enum": ["automatic", "manual"],
+          "enum": [
+            "automatic",
+            "manual"
+          ],
           "default": "automatic"
         },
         "selectorTemplate": {
@@ -46,7 +61,10 @@
           "uniqueItems": true,
           "items": {
             "type": "string",
-            "enum": ["Dkim1Ed25519Sha256", "Dkim1RsaSha256"]
+            "enum": [
+              "Dkim1Ed25519Sha256",
+              "Dkim1RsaSha256"
+            ]
           }
         },
         "rotateAfterMillis": {
@@ -69,7 +87,9 @@
       "properties": {
         "mode": {
           "type": "string",
-          "enum": ["consumer-managed"],
+          "enum": [
+            "consumer-managed"
+          ],
           "default": "consumer-managed"
         },
         "publicationOutputFile": {
@@ -90,7 +110,10 @@
       "items": {
         "type": "object",
         "additionalProperties": false,
-        "required": ["localPart", "passwordRef"],
+        "required": [
+          "localPart",
+          "passwordRef"
+        ],
         "properties": {
           "localPart": {
             "$ref": "#/$defs/localPart"
@@ -140,7 +163,9 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["envVar"],
+          "required": [
+            "envVar"
+          ],
           "properties": {
             "envVar": {
               "$ref": "#/$defs/envVar"
@@ -150,7 +175,9 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["file"],
+          "required": [
+            "file"
+          ],
           "properties": {
             "file": {
               "$ref": "#/$defs/absolutePath"
@@ -160,7 +187,11 @@
         {
           "type": "object",
           "additionalProperties": false,
-          "required": ["vaultPath", "file", "sourceIdentity"],
+          "required": [
+            "vaultPath",
+            "file",
+            "sourceIdentity"
+          ],
           "properties": {
             "vaultPath": {
               "type": "string",

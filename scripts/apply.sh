@@ -57,7 +57,9 @@ validate_inputs() {
 load_manifest_domain() {
   STALWART_DOMAIN="$(jq -r '.domain.name' "$STALWART_MANIFEST")"
   STALWART_HOSTNAME="$(jq -r '.domain.publicHostname' "$STALWART_MANIFEST")"
-  export STALWART_DOMAIN STALWART_HOSTNAME
+  # // empty so an absent field yields "" rather than the string "null".
+  STALWART_CATCHALL="$(jq -r '.domain.catchAllAddress // empty' "$STALWART_MANIFEST")"
+  export STALWART_DOMAIN STALWART_HOSTNAME STALWART_CATCHALL
 }
 
 wait_ready() {
@@ -117,6 +119,23 @@ reconcile_dkim() {
   echo "apply: reconciling DKIM management for ${STALWART_DOMAIN}"
   jq -nc --arg domain_id "$domain_id" --argjson dkim "$dkim" \
     '{"@type":"update","object":"Domain","id":$domain_id,"value":{"dkimManagement":$dkim}}' \
+    | sc apply --file /dev/stdin
+}
+
+reconcile_catch_all() {
+  domain_id="$1"
+
+  # Absent or empty is a no-op, never a clear: the catch-all may have been set
+  # outside this manifest -- by hand in webadmin, or by the env-driven
+  # predecessor -- and silently removing it means mail to unknown local
+  # recipients is dropped with nothing to explain why.
+  [ -n "${STALWART_CATCHALL:-}" ] || return
+
+  # A separate partial update so it touches catchAllAddress alone and cannot
+  # disturb the cert or DNS wiring on the same Domain object.
+  echo "apply: setting catch-all for ${STALWART_DOMAIN} to ${STALWART_CATCHALL}"
+  jq -nc --arg domain_id "$domain_id" --arg addr "$STALWART_CATCHALL" \
+    '{"@type":"update","object":"Domain","id":$domain_id,"value":{"catchAllAddress":$addr}}' \
     | sc apply --file /dev/stdin
 }
 
@@ -252,6 +271,7 @@ main() {
   [ -n "$domain_id" ] || { echo "apply: domain ${STALWART_DOMAIN} not found in the datastore" >&2; exit 1; }
   reconcile_domain_settings "$domain_id"
   reconcile_dkim "$domain_id"
+  reconcile_catch_all "$domain_id"
   reconcile_account_credentials "$domain_id"
   reconcile_account_metadata "$domain_id"
   write_dns_requirements

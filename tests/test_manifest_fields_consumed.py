@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 SCHEMA = ROOT / "schema" / "provisioning-manifest.v2.schema.json"
@@ -34,15 +35,15 @@ SOURCES = (
 VALIDATOR_ONLY = {"schemaVersion", "preExistingAccounts"}
 
 
-def _declared_fields(node: dict, path: list[str]) -> list[tuple[str, str]]:
+def _declared_fields(node: dict[str, Any], path: list[str]) -> list[tuple[str, str]]:
     found = []
     for key, value in (node.get("properties") or {}).items():
-        found.append(("." .join(path + [key]), key))
+        found.append((".".join([*path, key]), key))
         if isinstance(value, dict):
-            found += _declared_fields(value, path + [key])
+            found += _declared_fields(value, [*path, key])
             items = value.get("items")
             if isinstance(items, dict):
-                found += _declared_fields(items, path + [key, "[]"])
+                found += _declared_fields(items, [*path, key, "[]"])
     return found
 
 

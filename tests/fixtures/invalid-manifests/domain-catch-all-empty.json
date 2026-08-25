@@ -3,7 +3,7 @@
   "domain": {
     "name": "example.test",
     "publicHostname": "mail.example.test",
-    "catchAllAddress": "postmaster@example.test"
+    "catchAllAddress": ""
   },
   "dkim": {
     "enabled": true,

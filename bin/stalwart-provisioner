@@ -115,10 +115,37 @@ class ManifestValidator:
                 self.err(field, "must be a valid DNS hostname")
             else:
                 result[key] = value
+        self.validate_catch_all(domain, where, result)
         for key in domain:
-            if key not in {"name", "publicHostname"}:
+            if key not in {"name", "publicHostname", "catchAllAddress"}:
                 self.err(display_path(where, key), "unknown field")
         return result
+
+    def validate_catch_all(
+        self, domain: dict[str, Any], where: str, result: dict[str, str]
+    ) -> None:
+        # Optional by design: a manifest that omits it must leave any existing
+        # catch-all untouched rather than clearing it, because the value
+        # predates this tool in deployments migrating off the env-driven
+        # reconcile.
+        if "catchAllAddress" not in domain:
+            return
+        value = domain["catchAllAddress"]
+        field = display_path(where, "catchAllAddress")
+        if not isinstance(value, str) or not value:
+            self.err(field, "must be a non-empty string when present")
+            return
+        local, sep, host = value.rpartition("@")
+        if not sep:
+            self.err(field, "must be an email address of the form local-part@domain")
+            return
+        if not LOCAL_PART.fullmatch(local):
+            self.err(field, "local part is not a valid mailbox name")
+            return
+        if not HOSTNAME.fullmatch(host):
+            self.err(field, "domain part must be a valid DNS hostname")
+            return
+        result["catchAllAddress"] = value
 
     def validate_pre_existing(self, value: Any) -> set[str]:
         if not isinstance(value, list):

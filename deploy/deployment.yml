@@ -3,6 +3,10 @@ kind: Deployment
 metadata:
   name: stalwart-provisioner
 spec:
+  # Must equal the toolkit version the workflows pin (schema-version: 0.18.0).
+  # It was absent, so schema_pinned failed and every release since 0.3.0 broke
+  # at the deploy-artifact step.
+  schemaVersion: 0.18.0
   namespace: mail-system
   workloads:
     - name: stalwart-provisioner
@@ -11,3 +15,11 @@ spec:
         alias: stalwart-provisioner
       health:
         timeoutClass: job
+        # This is a reconcile job against Stalwart's admin API, not a server:
+        # it has no listener and therefore no readiness path. Declared exempt
+        # rather than left blank, so the absence is a decision on the record
+        # instead of a missing field.
+        mandatory: false
+      rollbackTargetRetention:
+        minimumDays: 90
+        acknowledged: true

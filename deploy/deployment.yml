@@ -3,10 +3,12 @@ kind: Deployment
 metadata:
   name: stalwart-provisioner
 spec:
-  # Must equal the toolkit version the workflows pin (schema-version: 0.18.0).
-  # It was absent, so schema_pinned failed and every release since 0.3.0 broke
-  # at the deploy-artifact step.
-  schemaVersion: 0.18.0
+  # Kept in step with the schema-version the release workflow pins. The gate that
+  # matters is the toolkit's own check that the cluster context declares the same
+  # version as the installed toolkit; schema_pinned here only requires this field
+  # to be present and a version string, and its absence once broke every release
+  # after 0.3.0 at the deploy-artifact step.
+  schemaVersion: 0.20.0
   namespace: mail-system
   workloads:
     - name: stalwart-provisioner

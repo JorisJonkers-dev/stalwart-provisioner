@@ -187,13 +187,14 @@ jobs:
     name: Publish Deploy Artifact
     needs: [publish-target, resolve-image-lock]
     if: ${{ always() && needs.publish-target.outputs.should_publish == 'true' && needs.resolve-image-lock.result == 'success' }}
-    uses: JorisJonkers-dev/github-workflows/.github/workflows/deploy-artifact.yml@381d41e05b18fbb64aff7001e904f2f17abc2371 # v0.12.5
+    uses: JorisJonkers-dev/github-workflows/.github/workflows/deploy-artifact.yml@6d4af5313cc39386fff796fa89ea940ef5f0819d # v0.16.1
     with:
       ref: ${{ needs.publish-target.outputs.tag_name }}
       artifact-name: stalwart-provisioner
       artifact-version: ${{ needs.publish-target.outputs.tag_name }}
-      schema-version: 0.18.0
-      context-ref: ghcr.io/jorisjonkers-dev/cluster-deploy-context-public@sha256:76ec7b1d00b7a6d200127264d99151473048a5e18c3e7802dc99dc9a43ee9b3f
+      schema-version: 0.20.0
+      apply-bundle: true
+      context-ref: ghcr.io/jorisjonkers-dev/cluster-deploy-context-public@sha256:9479bc22ae11183c0b68f257d2c1a21455be8c3cff602d3a491ea3ff31d01fe3
       deploy-dir: deploy
       image-lock-artifact: ${{ needs.resolve-image-lock.outputs.images-lock-artifact }}
       environments: production

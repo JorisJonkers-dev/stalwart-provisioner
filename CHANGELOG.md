@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.2](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.4.1...v0.4.2) (2026-08-27)
+
+
+### Bug Fixes
+
+* **deploy:** move onto the 0.20.0 toolkit and cluster context ([#20](https://github.com/JorisJonkers-dev/stalwart-provisioner/issues/20)) ([c5449d1](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/c5449d1f4e1488e2d697308a7a0d914f76628931))
+
 ## [0.4.1](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.4.0...v0.4.1) (2026-08-25)
 
 

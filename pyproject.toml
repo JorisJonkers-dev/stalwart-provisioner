@@ -2,14 +2,14 @@
 name = "stalwart-provisioner"
 dynamic = ["version"]
 license = "LicenseRef-JorisJonkers-Proprietary-1.0"
-requires-python = ">=3.12"
+requires-python = "==3.14.7"
 dependencies = []
 
 [dependency-groups]
 dev = [
-  "mypy>=1.11,<2",
-  "pytest>=8.3,<9",
-  "ruff>=0.8,<1",
+  "mypy==1.20.2",
+  "pytest==8.4.2",
+  "ruff==0.15.20",
 ]
 
 [tool.uv]

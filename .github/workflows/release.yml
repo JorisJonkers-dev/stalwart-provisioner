@@ -187,7 +187,7 @@ jobs:
     name: Publish Deploy Artifact
     needs: [publish-target, resolve-image-lock]
     if: ${{ always() && needs.publish-target.outputs.should_publish == 'true' && needs.resolve-image-lock.result == 'success' }}
-    uses: JorisJonkers-dev/github-workflows/.github/workflows/deploy-artifact.yml@6d4af5313cc39386fff796fa89ea940ef5f0819d # v0.16.1
+    uses: JorisJonkers-dev/github-workflows/.github/workflows/deploy-artifact.yml@ce3b149334e147f65a5d6f6a8b674b8c90fb481f # v0.27.3
     with:
       ref: ${{ needs.publish-target.outputs.tag_name }}
       artifact-name: stalwart-provisioner

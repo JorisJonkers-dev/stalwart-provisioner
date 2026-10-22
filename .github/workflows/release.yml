@@ -26,14 +26,14 @@ jobs:
       # default GITHUB_TOKEN) so CI runs on the PR without a manual approval
       # gate. Best-effort: falls back to GITHUB_TOKEN when the App secrets or
       # installation are absent.
-      - uses: actions/create-github-app-token@v3
+      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         id: app-token
         continue-on-error: true
         with:
           app-id: ${{ secrets.RELEASE_APP_ID }}
           private-key: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}
       - id: release
-        uses: googleapis/release-please-action@v5
+        uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
         with:
           token: ${{ steps.app-token.outputs.token || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
@@ -79,7 +79,7 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.publish-target.outputs.tag_name }}
       - name: Log in to GHCR
@@ -109,10 +109,10 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.publish-target.outputs.tag_name }}
-      - uses: oras-project/setup-oras@v2
+      - uses: oras-project/setup-oras@005458ad77f1c8facd38a094e4af2e69e5607ff4 # v2.0.2
       - name: Pack deploy bundle
         env:
           RELEASE_TAG: ${{ needs.publish-target.outputs.tag_name }}
@@ -146,7 +146,7 @@ jobs:
     outputs:
       images-lock-artifact: images-lock-${{ github.run_id }}
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.publish-target.outputs.tag_name }}
       - name: resolve-image-digest
@@ -177,7 +177,7 @@ jobs:
           printf '{"stalwart-provisioner":"ghcr.io/jorisjonkers-dev/stalwart-provisioner@%s"}\n' "$IMAGE_DIGEST" \
             > deploy/images.lock.json
       - name: upload-image-lock
-        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: images-lock-${{ github.run_id }}
           path: deploy/images.lock.json

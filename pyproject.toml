@@ -2,7 +2,7 @@
 name = "stalwart-provisioner"
 dynamic = ["version"]
 license = "LicenseRef-JorisJonkers-Proprietary-1.0"
-requires-python = "==3.15.0"
+requires-python = "==3.15.1"
 dependencies = []
 
 [dependency-groups]

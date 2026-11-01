@@ -14,9 +14,9 @@ from typing import Any
 
 ROOT = Path(__file__).resolve().parents[1]
 DEPLOY_DIR = ROOT / "deploy"
-# Legacy bundle source file. deploy/deployment.yml is now the v2-format file for the
-# standard deploy-artifact pipeline. This file retains the old DeploymentProject format
-# consumed by deployment-sources.yml until that path is retired in Phase 3.
+# Legacy bundle source file, packed as deploy/deployment.yml. It keeps the old
+# DeploymentProject format consumed by deployment-sources.yml until that path is
+# retired in Phase 3.
 DEPLOYMENT = DEPLOY_DIR / "deployment.bundle.yml"
 ENV_FILES = (
     "runtime.env",

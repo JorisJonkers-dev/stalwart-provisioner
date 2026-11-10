@@ -5,7 +5,15 @@ ARG STALWART_CLI_VERSION=1.0.7
 LABEL org.opencontainers.image.source="https://github.com/JorisJonkers-dev/stalwart-provisioner"
 LABEL org.opencontainers.image.description="Schema-driven Stalwart account and DKIM provisioner"
 
-RUN apk add --no-cache ca-certificates curl gettext jq python3 tar xz \
+# apk installs through the package proxy when the build has its packages-netrc secret (CI); without it, from Alpine's own mirrors.
+RUN --mount=type=secret,id=packages-netrc,target=/root/.netrc,required=false \
+    set -e; \
+    repos=""; \
+    if [ -s /root/.netrc ]; then \
+      v=$(cut -d. -f1,2 /etc/alpine-release); \
+      repos="--repositories-file /dev/null --repository https://packages.jorisjonkers.dev/apk/alpine/v$v/main --repository https://packages.jorisjonkers.dev/apk/alpine/v$v/community"; \
+    fi; \
+    apk add --no-cache $repos ca-certificates curl gettext jq python3 tar xz \
   && arch="$(uname -m)" \
   && case "$arch" in \
     x86_64) target=x86_64-unknown-linux-musl ;; \

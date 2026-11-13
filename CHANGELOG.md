@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.3](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.4.2...v0.4.3) (2026-11-13)
+
+
+### Bug Fixes
+
+* **hygiene:** never cancel a run of the required hygiene checks ([#56](https://github.com/JorisJonkers-dev/stalwart-provisioner/issues/56)) ([8f160ae](https://github.com/JorisJonkers-dev/stalwart-provisioner/commit/8f160aea2ec245d482752389184315f56d9d790b))
+
 ## [0.4.2](https://github.com/JorisJonkers-dev/stalwart-provisioner/compare/v0.4.1...v0.4.2) (2026-08-27)
 
 

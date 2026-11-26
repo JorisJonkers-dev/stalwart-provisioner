@@ -26,7 +26,7 @@ jobs:
       # default GITHUB_TOKEN) so CI runs on the PR without a manual approval
       # gate. Best-effort: falls back to GITHUB_TOKEN when the App secrets or
       # installation are absent.
-      - uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+      - uses: actions/create-github-app-token@f418cff399f7aef4c2f0ad47e25ca7a6abbdd6fc # v3.4.0
         id: app-token
         continue-on-error: true
         with:
@@ -112,7 +112,7 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           ref: ${{ needs.publish-target.outputs.tag_name }}
-      - uses: oras-project/setup-oras@5e2f2482b30b0cb3e14e67f89a80c88c659a7c63 # v2.0.3
+      - uses: oras-project/setup-oras@ac735097e22fe643015b0d19645f7c9a69942128 # v2.0.4
       - name: Pack deploy bundle
         env:
           RELEASE_TAG: ${{ needs.publish-target.outputs.tag_name }}
